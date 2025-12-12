@@ -1,0 +1,273 @@
+<?php
+/*
+Plugin Name:  Simpli Images
+Plugin URI:   https://simpliweb.com.au
+Description:  WordPress media optimiser
+Version:      1.1.0
+Author:       SimpliWeb
+Author URI:   https://simpliweb.com.au
+License:      GPL v2 or later
+License URI:  https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain:  simpli-images
+Domain Path:  /languages
+*/
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+// Define plugin constants
+define('SIMPLI_IMAGES_VERSION', '1.1.0');
+define('SIMPLI_IMAGES_PATH', plugin_dir_path(__FILE__));
+define('SIMPLI_IMAGES_URL', plugin_dir_url(__FILE__));
+
+// Include required files
+require_once SIMPLI_IMAGES_PATH . 'inc/Settings.php';
+require_once SIMPLI_IMAGES_PATH . 'inc/helpers.php';
+
+class Simpli_Images {
+    
+    private static $instance = null;
+    
+    public static function get_instance() {
+        if (null === self::$instance) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+    
+    private function __construct() {
+        // Disable intermediate image sizes
+        add_filter('intermediate_image_sizes_advanced', array($this, 'disable_image_sizes'));
+        
+        // Handle image upload and optimization
+        add_filter('wp_handle_upload_prefilter', array($this, 'handle_upload_prefilter'));
+        add_filter('wp_handle_upload', array($this, 'optimize_uploaded_image'));
+        
+        // Add settings link on plugins page
+        add_filter('plugin_action_links_' . plugin_basename(__FILE__), array($this, 'add_settings_link'));
+        
+        // Clear cache when attachment is deleted
+        add_action('delete_attachment', array($this, 'clear_image_cache'));
+        
+        // Activation/Deactivation hooks
+        register_deactivation_hook(__FILE__, array($this, 'on_deactivation'));
+    }
+    
+    /**
+     * Disable intermediate image sizes based on settings
+     */
+    public function disable_image_sizes($sizes) {
+        // Check if globally disabled
+        if (get_option('simpli_images_remove_sizes', true)) {
+            return array();
+        }
+        
+        // Get disabled sizes
+        $disabled_sizes = get_option('simpli_images_disabled_sizes', array());
+        
+        if (!empty($disabled_sizes) && is_array($disabled_sizes)) {
+            foreach ($disabled_sizes as $size_name) {
+                unset($sizes[$size_name]);
+            }
+        }
+        
+        return $sizes;
+    }
+    
+    /**
+     * Pre-filter upload to check file type
+     */
+    public function handle_upload_prefilter($file) {
+        // Only process images
+        if (strpos($file['type'], 'image/') !== 0) {
+            return $file;
+        }
+        
+        return $file;
+    }
+    
+    /**
+     * Optimize uploaded image
+     */
+    public function optimize_uploaded_image($upload) {
+        if (!isset($upload['file']) || !isset($upload['type'])) {
+            return $upload;
+        }
+        
+        // Only process images
+        if (strpos($upload['type'], 'image/') !== 0) {
+            return $upload;
+        }
+        
+        $file_path = $upload['file'];
+        $max_dimension = absint(get_option('simpli_images_max_dimension', 1200));
+        $max_size_mb = floatval(get_option('simpli_images_max_size', 1.2));
+        $jpeg_quality = absint(get_option('simpli_images_jpeg_quality', 82));
+        
+        // Get image editor
+        $image_editor = wp_get_image_editor($file_path);
+        
+        if (is_wp_error($image_editor)) {
+            return $upload;
+        }
+        
+        $current_size = $image_editor->get_size();
+        $needs_resize = false;
+        
+        // Check if resizing is needed based on dimensions
+        if ($max_dimension > 0) {
+            $max_current = max($current_size['width'], $current_size['height']);
+            
+            if ($max_current > $max_dimension) {
+                $needs_resize = true;
+                
+                if ($current_size['width'] > $current_size['height']) {
+                    $new_width = $max_dimension;
+                    $new_height = intval($current_size['height'] * ($max_dimension / $current_size['width']));
+                } else {
+                    $new_height = $max_dimension;
+                    $new_width = intval($current_size['width'] * ($max_dimension / $current_size['height']));
+                }
+                
+                $image_editor->resize($new_width, $new_height, false);
+            }
+        }
+        
+        // Set JPEG quality
+        if (strpos($upload['type'], 'jpeg') !== false || strpos($upload['type'], 'jpg') !== false) {
+            $image_editor->set_quality($jpeg_quality);
+        }
+        
+        // Save the optimized image
+        if ($needs_resize) {
+            $saved = $image_editor->save($file_path);
+            
+            if (is_wp_error($saved)) {
+                return $upload;
+            }
+        }
+        
+        // Check file size and compress if needed
+        if ($max_size_mb > 0) {
+            $max_size_bytes = $max_size_mb * 1024 * 1024;
+            $current_file_size = filesize($file_path);
+            
+            if ($current_file_size > $max_size_bytes) {
+                // Reload the image editor if we already saved
+                if ($needs_resize) {
+                    $image_editor = wp_get_image_editor($file_path);
+                    if (is_wp_error($image_editor)) {
+                        return $upload;
+                    }
+                }
+                
+                // For JPEGs, reduce quality to meet file size
+                if (strpos($upload['type'], 'jpeg') !== false || strpos($upload['type'], 'jpg') !== false) {
+                    $quality = $jpeg_quality;
+                    $attempts = 0;
+                    
+                    while ($current_file_size > $max_size_bytes && $quality > 20 && $attempts < 10) {
+                        $quality -= 5;
+                        $image_editor->set_quality($quality);
+                        $image_editor->save($file_path);
+                        $current_file_size = filesize($file_path);
+                        $attempts++;
+                    }
+                }
+            }
+        }
+        
+        // Delete the -scaled version if it exists
+        $this->delete_scaled_image($file_path);
+        
+        return $upload;
+    }
+    
+    /**
+     * Delete WordPress's auto-generated -scaled image
+     */
+    private function delete_scaled_image($file_path) {
+        $path_info = pathinfo($file_path);
+        $scaled_path = $path_info['dirname'] . '/' . $path_info['filename'] . '-scaled.' . $path_info['extension'];
+        
+        if (file_exists($scaled_path)) {
+            @unlink($scaled_path);
+        }
+    }
+    
+    /**
+     * Add settings link to plugins page
+     */
+    public function add_settings_link($links) {
+        $settings_link = '<a href="options-general.php?page=simpli-images">Settings</a>';
+        array_unshift($links, $settings_link);
+        return $links;
+    }
+    
+    /**
+     * Clear cached images for a specific attachment
+     */
+    public function clear_image_cache($image_id) {
+        $upload_dir = wp_upload_dir();
+        $cache_dir = $upload_dir['basedir'] . '/simpli-cache/';
+        
+        if (!is_dir($cache_dir)) {
+            return;
+        }
+        
+        // Remove all cached versions of this image
+        $files = glob($cache_dir . $image_id . '-*');
+        
+        foreach ($files as $file) {
+            if (file_exists($file)) {
+                @unlink($file);
+            }
+        }
+    }
+    
+    /**
+     * On plugin deactivation
+     */
+    public function on_deactivation() {
+        // Check if user wants to regenerate thumbnails on deactivation
+        if (get_option('simpli_images_regenerate_on_deactivation', false)) {
+            // Temporarily remove our filter to restore WordPress defaults
+            remove_filter('intermediate_image_sizes_advanced', array($this, 'disable_image_sizes'));
+            
+            // Regenerate thumbnails for all images
+            $args = array(
+                'post_type' => 'attachment',
+                'post_mime_type' => 'image',
+                'post_status' => 'inherit',
+                'posts_per_page' => -1
+            );
+            
+            $attachments = get_posts($args);
+            
+            foreach ($attachments as $attachment) {
+                $file = get_attached_file($attachment->ID);
+                
+                if ($file && file_exists($file)) {
+                    // Delete existing thumbnails
+                    $metadata = wp_get_attachment_metadata($attachment->ID);
+                    if (!empty($metadata['sizes'])) {
+                        foreach ($metadata['sizes'] as $size => $sizeinfo) {
+                            $intermediate_file = str_replace(basename($file), $sizeinfo['file'], $file);
+                            if (file_exists($intermediate_file)) {
+                                @unlink($intermediate_file);
+                            }
+                        }
+                    }
+                    
+                    // Regenerate with WordPress defaults
+                    $metadata = wp_generate_attachment_metadata($attachment->ID, $file);
+                    wp_update_attachment_metadata($attachment->ID, $metadata);
+                }
+            }
+        }
+    }
+}
+
+// Initialize the plugin
+Simpli_Images::get_instance();

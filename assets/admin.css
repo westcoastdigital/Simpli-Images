@@ -1,0 +1,112 @@
+/**
+ * Simpli Images Admin Styles
+ */
+
+.simpli-images-settings .nav-tab-wrapper {
+    margin-bottom: 20px;
+}
+
+.simpli-images-settings .tab-content {
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ccd0d4;
+    border-top: none;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.simpli-images-settings .size-group {
+    margin-bottom: 30px;
+}
+
+.simpli-images-settings .size-group h4 {
+    background: #f0f0f1;
+    padding: 10px 15px;
+    margin: 0 0 10px 0;
+    border-left: 4px solid #2271b1;
+}
+
+.simpli-images-settings .size-group table {
+    margin-bottom: 20px;
+}
+
+.simpli-images-settings .size-group table th {
+    background: #f9f9f9;
+    font-weight: 600;
+}
+
+.simpli-images-settings .size-group table td,
+.simpli-images-settings .size-group table th {
+    padding: 12px 10px;
+}
+
+.simpli-images-settings .size-group table code {
+    background: #f0f0f1;
+    padding: 3px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.simpli-images-settings #selective-sizes {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.simpli-images-settings #regenerate-form {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.simpli-images-settings #regenerate-form button {
+    margin-right: 10px;
+}
+
+.simpli-images-settings .form-table td {
+    padding-bottom: 20px;
+}
+
+.simpli-images-settings .form-table .description {
+    margin-top: 8px;
+    display: block;
+}
+
+.simpli-images-settings hr {
+    margin: 30px 0;
+    border: 0;
+    border-top: 1px solid #ddd;
+}
+
+.simpli-images-settings .widefat td {
+    padding: 12px 10px;
+}
+
+.simpli-images-settings .widefat strong {
+    min-width: 200px;
+    display: inline-block;
+}
+
+/* AJAX save feedback */
+.simpli-images-settings #sizes-save-message {
+    display: inline-block;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.simpli-images-settings .spinner.is-active {
+    visibility: visible;
+    display: inline-block;
+}
+
+.simpli-images-settings .submit {
+    position: relative;
+}
+
+.simpli-images-settings #save-sizes-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
