@@ -3,7 +3,7 @@
 Plugin Name:  Simpli Images
 Plugin URI:   https://simpliweb.com.au
 Description:  WordPress media optimiser
-Version:      1.0.0
+Version:      1.1.0
 Author:       SimpliWeb
 Author URI:   https://simpliweb.com.au
 License:      GPL v2 or later
