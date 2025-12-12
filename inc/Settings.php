@@ -36,7 +36,7 @@ class Simpli_Images_Settings {
      * Enqueue admin scripts and styles
      */
     public function enqueue_admin_scripts($hook) {
-        if ('settings_page_simpli-images' !== $hook) {
+        if ('media_page_simpli-images' !== $hook) {
             return;
         }
         
@@ -53,13 +53,6 @@ class Simpli_Images_Settings {
      * Add settings page to WordPress admin
      */
     public function add_settings_page() {
-        // add_options_page(
-        //     'Simpli Images Settings',
-        //     'Simpli Images',
-        //     'manage_options',
-        //     'simpli-images',
-        //     array($this, 'render_settings_page')
-        // );
         add_media_page(
             'Simpli Images Settings',
             'Simpli Images',
@@ -599,7 +592,7 @@ class Simpli_Images_Settings {
             'page' => 'simpli-images',
             'tab' => 'uploads',
             'cache-cleared' => $deleted
-        ), admin_url('options-general.php')));
+        ), admin_url('upload.php')));
         exit;
     }
     
@@ -676,7 +669,7 @@ class Simpli_Images_Settings {
             'page' => 'simpli-images',
             'tab' => 'sizes',
             'thumbnails-regenerated' => $count
-        ), admin_url('options-general.php')));
+        ), admin_url('upload.php')));
         exit;
     }
     
