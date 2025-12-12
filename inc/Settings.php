@@ -27,6 +27,11 @@ class Simpli_Images_Settings {
         
         // AJAX handlers
         add_action('wp_ajax_simpli_save_sizes', array($this, 'ajax_save_sizes'));
+        add_action('wp_ajax_simpli_clear_image_cache', array($this, 'ajax_clear_image_cache'));
+        
+        // Add media library action links
+        add_filter('media_row_actions', array($this, 'add_media_row_actions'), 10, 2);
+        add_filter('attachment_fields_to_edit', array($this, 'add_attachment_field'), 10, 2);
         
         // Add redirect handler to preserve tab parameter
         add_filter('wp_redirect', array($this, 'preserve_tab_on_redirect'), 10, 2);
@@ -36,17 +41,26 @@ class Simpli_Images_Settings {
      * Enqueue admin scripts and styles
      */
     public function enqueue_admin_scripts($hook) {
-        if ('media_page_simpli-images' !== $hook) {
-            return;
+        // Enqueue on our settings page
+        if ('media_page_simpli-images' === $hook) {
+            wp_enqueue_style('simpli-images-admin', SIMPLI_IMAGES_URL . 'assets/admin.css', array(), SIMPLI_IMAGES_VERSION);
+            wp_enqueue_script('simpli-images-admin', SIMPLI_IMAGES_URL . 'assets/admin.js', array('jquery'), SIMPLI_IMAGES_VERSION, true);
+            
+            wp_localize_script('simpli-images-admin', 'simpliImages', array(
+                'ajaxUrl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('simpli_images_ajax')
+            ));
         }
         
-        wp_enqueue_style('simpli-images-admin', SIMPLI_IMAGES_URL . 'assets/admin.css', array(), SIMPLI_IMAGES_VERSION);
-        wp_enqueue_script('simpli-images-admin', SIMPLI_IMAGES_URL . 'assets/admin.js', array('jquery'), SIMPLI_IMAGES_VERSION, true);
-        
-        wp_localize_script('simpli-images-admin', 'simpliImages', array(
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('simpli_images_ajax')
-        ));
+        // Enqueue on media library pages for cache clearing
+        if ('upload.php' === $hook || 'post.php' === $hook) {
+            wp_enqueue_script('simpli-images-media', SIMPLI_IMAGES_URL . 'assets/admin.js', array('jquery'), SIMPLI_IMAGES_VERSION, true);
+            
+            wp_localize_script('simpli-images-media', 'simpliImages', array(
+                'ajaxUrl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('simpli_images_ajax')
+            ));
+        }
     }
     
     /**
@@ -708,6 +722,85 @@ class Simpli_Images_Settings {
                 'regenerate_on_deactivation' => $regenerate_on_deactivation
             )
         ));
+    }
+    
+    /**
+     * AJAX handler for clearing individual image cache
+     */
+    public function ajax_clear_image_cache() {
+        // Check permissions
+        if (!current_user_can('upload_files')) {
+            wp_send_json_error(array('message' => 'Unauthorized'));
+        }
+        
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'simpli_images_ajax')) {
+            wp_send_json_error(array('message' => 'Security check failed'));
+        }
+        
+        // Get image ID
+        $image_id = isset($_POST['image_id']) ? absint($_POST['image_id']) : 0;
+        
+        if (!$image_id) {
+            wp_send_json_error(array('message' => 'Invalid image ID'));
+        }
+        
+        // Clear cache for this image
+        $upload_dir = wp_upload_dir();
+        $cache_dir = $upload_dir['basedir'] . '/simpli-cache/';
+        
+        $deleted = 0;
+        if (is_dir($cache_dir)) {
+            $files = glob($cache_dir . $image_id . '-*');
+            
+            foreach ($files as $file) {
+                if (file_exists($file)) {
+                    @unlink($file);
+                    $deleted++;
+                }
+            }
+        }
+        
+        wp_send_json_success(array(
+            'message' => $deleted > 0 ? "Cleared {$deleted} cached image(s)" : 'No cached images found',
+            'deleted' => $deleted
+        ));
+    }
+    
+    /**
+     * Add clear cache action to media library rows
+     */
+    public function add_media_row_actions($actions, $post) {
+        // Only add for images
+        if (strpos($post->post_mime_type, 'image/') === 0) {
+            $actions['simpli_clear_cache'] = sprintf(
+                '<a href="#" class="simpli-clear-cache" data-image-id="%d">Clear Simpli Cache</a>',
+                $post->ID
+            );
+        }
+        
+        return $actions;
+    }
+    
+    /**
+     * Add clear cache button to attachment details modal
+     */
+    public function add_attachment_field($form_fields, $post) {
+        // Only add for images
+        if (strpos($post->post_mime_type, 'image/') === 0) {
+            $form_fields['simpli_clear_cache'] = array(
+                'label' => 'Simpli Images',
+                'input' => 'html',
+                'html' => sprintf(
+                    '<button type="button" class="button simpli-clear-cache-modal" data-image-id="%d">Clear Cache</button>
+                    <span class="simpli-cache-message" style="margin-left: 10px;"></span>
+                    <p class="description">Clear all cached versions of this image generated by Simpli Images.</p>',
+                    $post->ID
+                ),
+            );
+        }
+        
+        return $form_fields;
     }
 }
 

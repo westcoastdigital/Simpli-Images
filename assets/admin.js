@@ -87,4 +87,109 @@ jQuery(document).ready(function($) {
         return false;
     });
     
+    // Handle clear cache link in media library list view
+    $(document).on('click', '.simpli-clear-cache', function(e) {
+        e.preventDefault();
+        
+        var $link = $(this);
+        var imageId = $link.data('image-id');
+        var originalText = $link.text();
+        
+        if (!imageId) {
+            return;
+        }
+        
+        // Show loading state
+        $link.text('Clearing...');
+        
+        // Send AJAX request
+        $.ajax({
+            url: simpliImages.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'simpli_clear_image_cache',
+                nonce: simpliImages.nonce,
+                image_id: imageId
+            },
+            success: function(response) {
+                if (response.success) {
+                    $link.text('✓ ' + response.data.message);
+                    
+                    // Reset after 2 seconds
+                    setTimeout(function() {
+                        $link.text(originalText);
+                    }, 2000);
+                } else {
+                    $link.text('✗ ' + response.data.message);
+                    
+                    setTimeout(function() {
+                        $link.text(originalText);
+                    }, 2000);
+                }
+            },
+            error: function() {
+                $link.text('✗ Error');
+                
+                setTimeout(function() {
+                    $link.text(originalText);
+                }, 2000);
+            }
+        });
+    });
+    
+    // Handle clear cache button in attachment details modal
+    $(document).on('click', '.simpli-clear-cache-modal', function(e) {
+        e.preventDefault();
+        
+        var $button = $(this);
+        var $message = $button.siblings('.simpli-cache-message');
+        var imageId = $button.data('image-id');
+        
+        if (!imageId) {
+            return;
+        }
+        
+        // Show loading state
+        $button.prop('disabled', true).text('Clearing...');
+        $message.html('');
+        
+        // Send AJAX request
+        $.ajax({
+            url: simpliImages.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'simpli_clear_image_cache',
+                nonce: simpliImages.nonce,
+                image_id: imageId
+            },
+            success: function(response) {
+                if (response.success) {
+                    $message.html('<span style="color: #46b450;">✓ ' + response.data.message + '</span>');
+                } else {
+                    $message.html('<span style="color: #dc3232;">✗ ' + response.data.message + '</span>');
+                }
+                
+                // Reset button
+                $button.prop('disabled', false).text('Clear Cache');
+                
+                // Fade out message after 3 seconds
+                setTimeout(function() {
+                    $message.fadeOut(function() {
+                        $message.html('').show();
+                    });
+                }, 3000);
+            },
+            error: function() {
+                $message.html('<span style="color: #dc3232;">✗ Error clearing cache</span>');
+                $button.prop('disabled', false).text('Clear Cache');
+                
+                setTimeout(function() {
+                    $message.fadeOut(function() {
+                        $message.html('').show();
+                    });
+                }, 3000);
+            }
+        });
+    });
+    
 });
