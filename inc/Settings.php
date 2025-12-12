@@ -53,7 +53,14 @@ class Simpli_Images_Settings {
      * Add settings page to WordPress admin
      */
     public function add_settings_page() {
-        add_options_page(
+        // add_options_page(
+        //     'Simpli Images Settings',
+        //     'Simpli Images',
+        //     'manage_options',
+        //     'simpli-images',
+        //     array($this, 'render_settings_page')
+        // );
+        add_media_page(
             'Simpli Images Settings',
             'Simpli Images',
             'manage_options',
