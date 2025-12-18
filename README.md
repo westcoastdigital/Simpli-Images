@@ -2,20 +2,18 @@
 
 A WordPress plugin for media library optimization that prevents intermediate image sizes, automatically resizes/compresses uploaded images, and provides dynamic image generation with caching.
 
-## Version 1.1.0 - What's New
+## Version 1.2.0 - What's New
 
-- **Refactored Architecture**: Cleaner code structure with separate files
-- **Tabbed Settings Interface**: Organized settings across multiple tabs
-- **Selective Size Control**: Choose which image sizes to disable, grouped by plugin/theme
-- **Thumbnail Regeneration**: Built-in tool to regenerate thumbnails when needed
-- **Cache Management**: Clear cached images directly from settings page
-- **Deactivation Options**: Optionally regenerate thumbnails on plugin deactivation
+- **WordPress Function Override**: Automatically intercepts `wp_get_attachment_image()`, `the_post_thumbnail()`, and all WordPress image functions to use dynamically generated optimized images
+- **Seamless Integration**: Works with existing themes and plugins without code changes
+- **Enhanced Flexibility**: Toggle override on/off to switch between dynamic and traditional image handling
 
 ## Features
 
 - **Upload Optimization**: Automatically resize and compress images on upload
 - **Remove Image Sizes**: Globally disable all intermediate sizes or selectively disable specific ones
 - **Dynamic Image Generation**: Generate images at any size on-demand with `simplimg()` function
+- **WordPress Function Override**: Automatically use optimized images for all WordPress image functions
 - **Smart Caching**: Generated images are cached for fast subsequent loads
 - **Flexible Cropping**: Multiple crop positions (center, top, bottom, corners)
 - **Aspect Ratio Support**: Easy 16:9, 4:3, 1:1, etc. with automatic cropping
@@ -76,6 +74,13 @@ Control which WordPress image sizes are generated:
 - When enabled, only optimized originals are stored
 - Use `simplimg()` for dynamic sizing
 
+**Override WordPress Image Functions** ⭐ NEW in 1.2.0
+- Default: Enabled
+- Automatically uses Simpli Images for all WordPress image requests
+- Works with `wp_get_attachment_image()`, `the_post_thumbnail()`, `get_the_post_thumbnail()`, etc.
+- No theme/plugin code changes needed
+- Toggle off to use traditional WordPress image handling
+
 **Selective Size Control** (when not removing all)
 - Sizes grouped by source: WordPress Core, Theme, Plugins
 - Checkbox interface to disable specific sizes
@@ -85,6 +90,75 @@ Control which WordPress image sizes are generated:
 - Regenerate all thumbnails manually
 - Optional: Auto-regenerate on plugin deactivation
 - Useful when switching themes or re-enabling sizes
+
+## WordPress Function Override
+
+### How It Works
+
+When enabled, the plugin automatically intercepts all WordPress image function calls and serves dynamically generated, optimized images instead of pre-generated thumbnails.
+
+**Supported Functions:**
+- `wp_get_attachment_image()`
+- `wp_get_attachment_image_src()`
+- `wp_get_attachment_image_url()`
+- `get_the_post_thumbnail()`
+- `the_post_thumbnail()`
+- Any function that uses `image_downsize` internally
+
+### Automatic Size Mapping
+
+The plugin intelligently handles WordPress's registered image sizes:
+
+```php
+// Your theme calls this
+the_post_thumbnail('medium');
+
+// Plugin automatically generates
+// 800x600 optimized image (or whatever 'medium' is configured as)
+// First request: generates and caches
+// Subsequent requests: serves from cache
+```
+
+### Examples
+
+**Before Plugin (Traditional WordPress):**
+```php
+// Requires pre-generated thumbnail files
+the_post_thumbnail('thumbnail');           // Uses thumbnail-150x150.jpg
+wp_get_attachment_image($id, 'medium');    // Uses medium-300x300.jpg
+```
+
+**After Plugin (Automatic Override):**
+```php
+// Same code, but uses dynamically generated images
+the_post_thumbnail('thumbnail');           // Generates 150x150 on-demand
+wp_get_attachment_image($id, 'medium');    // Generates 300x300 on-demand
+
+// Also works with custom sizes
+wp_get_attachment_image($id, array(500, 300));  // Generates 500x300
+```
+
+**Manual Control:**
+```php
+// Still have full control with simplimg()
+simplimg($id, 16, 9, 'crop');              // 16:9 aspect ratio
+simplimg($id, 400, 'auto', false);         // Scale to 400px width
+```
+
+### Benefits of Override Mode
+
+1. **Zero Code Changes**: Works with existing themes and plugins
+2. **Massive Storage Savings**: No pre-generated thumbnails needed
+3. **Perfect for Multisite**: Consistent image handling across all sites
+4. **Better Performance**: Only generates sizes actually used
+5. **Flexible**: Can disable override and fall back to traditional mode
+
+### When to Disable Override
+
+- Using a caching plugin that pre-generates specific sizes
+- Theme requires exact WordPress image size metadata
+- Debugging image issues
+- Prefer manual `simplimg()` calls for full control
 
 ## Dynamic Image Generation
 
@@ -186,9 +260,10 @@ The plugin intelligently groups image sizes by their source:
 
 ### Selective Disabling Strategy
 
-**Scenario 1: E-commerce Site**
+**Scenario 1: E-commerce Site (Recommended)**
 ```
 Remove All: OFF
+Override WordPress Functions: ON
 Disabled: All theme sizes, WordPress medium_large
 Enabled: WooCommerce sizes, thumbnail, medium, large
 ```
@@ -196,14 +271,23 @@ Enabled: WooCommerce sizes, thumbnail, medium, large
 **Scenario 2: Blog Site**
 ```
 Remove All: ON
-Use simplimg() for all image rendering
+Override WordPress Functions: ON
+Use dynamic images for everything
 ```
 
 **Scenario 3: Mixed Content**
 ```
 Remove All: OFF
+Override WordPress Functions: ON
 Disabled: Unused plugin sizes (Elementor if not using)
 Enabled: Core sizes + active plugins
+```
+
+**Scenario 4: Maximum Control**
+```
+Remove All: ON
+Override WordPress Functions: OFF
+Use simplimg() manually in theme templates
 ```
 
 ## Cache Management
@@ -270,6 +354,7 @@ Max Dimension: 2400px (high-quality display)
 Max File Size: 2MB
 JPEG Quality: 85%
 Remove All Sizes: ON
+Override WordPress Functions: ON
 ```
 
 ### Blog/Content Site
@@ -278,6 +363,7 @@ Max Dimension: 1200px (standard width)
 Max File Size: 1MB
 JPEG Quality: 82%
 Remove All Sizes: ON
+Override WordPress Functions: ON
 ```
 
 ### eCommerce Site (WooCommerce)
@@ -286,6 +372,7 @@ Max Dimension: 1500px (product detail)
 Max File Size: 1.5MB
 JPEG Quality: 85%
 Remove All Sizes: OFF
+Override WordPress Functions: ON
 Disabled: Theme sizes only
 Enabled: WooCommerce + Core sizes
 ```
@@ -296,6 +383,7 @@ Max Dimension: 1000px (minimize storage)
 Max File Size: 800KB
 JPEG Quality: 75%
 Remove All Sizes: ON
+Override WordPress Functions: ON
 ```
 
 ## Technical Details
@@ -331,7 +419,8 @@ Total: 1 file per upload
 
 **Upload Processing:** <1 second per image  
 **First Dynamic Request:** 100-200ms (generation + cache)  
-**Cached Requests:** 0ms (direct file access)
+**Cached Requests:** 0ms (direct file access)  
+**Override Mode:** ~5ms (cache check + return URL)
 
 ### Compatibility
 
@@ -339,6 +428,7 @@ Total: 1 file per upload
 - PHP 7.0+
 - Works with: Media Library, Featured Images, ACF Image fields
 - Compatible with: Most page builders, WooCommerce, Elementor
+- Override mode compatible with: All themes using standard WordPress image functions
 
 ### Server Requirements
 
@@ -361,12 +451,26 @@ Total: 1 file per upload
 ### WooCommerce images broken
 - Ensure "Remove All Sizes" is OFF
 - Keep WooCommerce sizes enabled in Image Sizes tab
+- Verify "Override WordPress Functions" is ON
 - Regenerate thumbnails after changing settings
 
 ### Thumbnails missing after activation
 - This is expected if "Remove All Sizes" is enabled
-- Use `simplimg()` function to render images
+- Enable "Override WordPress Functions" for automatic handling
+- Or use `simplimg()` function to render images
 - Or disable "Remove All" and regenerate thumbnails
+
+### Theme images not showing with override enabled
+- Check that image sizes are registered in WordPress
+- Try disabling and re-enabling override
+- Clear cache and reload page
+- Check browser console for 404 errors
+
+### Override mode not working
+- Verify "Override WordPress Functions" is checked and saved
+- Check that theme uses standard WordPress image functions
+- Clear all caches (plugin cache, page cache, browser cache)
+- Test with a default theme to isolate theme-specific issues
 
 ## Migration & Deactivation
 
@@ -392,6 +496,13 @@ For support or custom development:
 - Plugin URI: https://simpliweb.com.au
 
 ## Changelog
+
+### 1.2.0
+- NEW: Override WordPress image functions (wp_get_attachment_image, the_post_thumbnail, etc.)
+- NEW: Automatic dynamic image generation for all WordPress image requests
+- NEW: Toggle to enable/disable WordPress function override
+- IMPROVED: Seamless integration with existing themes and plugins
+- IMPROVED: Zero code changes needed for theme compatibility
 
 ### 1.1.0
 - NEW: Tabbed settings interface

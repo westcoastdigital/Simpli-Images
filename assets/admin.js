@@ -33,6 +33,7 @@ jQuery(document).ready(function($) {
             nonce: $('#simpli_sizes_nonce').val(),
             remove_all_sizes: $('#simpli_images_remove_sizes').is(':checked') ? '1' : '0',
             disabled_sizes: [],
+            override_wp_functions: $('#simpli_images_override_wp_functions').is(':checked') ? '1' : '0',
             regenerate_on_deactivation: $('#simpli_images_regenerate_on_deactivation').is(':checked') ? '1' : '0'
         };
         
