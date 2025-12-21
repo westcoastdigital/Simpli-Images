@@ -2,15 +2,19 @@
 
 A WordPress plugin for media library optimization that prevents intermediate image sizes, automatically resizes/compresses uploaded images, and provides dynamic image generation with caching.
 
-## Version 1.2.0 - What's New
+## Version 1.3.0 - What's New
 
-- **WordPress Function Override**: Automatically intercepts `wp_get_attachment_image()`, `the_post_thumbnail()`, and all WordPress image functions to use dynamically generated optimized images
-- **Seamless Integration**: Works with existing themes and plugins without code changes
-- **Enhanced Flexibility**: Toggle override on/off to switch between dynamic and traditional image handling
+- **WebP Support**: Generate cached images in WebP format for 25-35% smaller file sizes
+- **Improved Error Handling**: Better upload error detection and logging for troubleshooting
+- **Flexible Upload Optimization**: Can disable upload processing to prevent errors on resource-constrained servers
+- **Automatic Cache Clearing**: WebP setting changes automatically clear and regenerate cache
+- **Enhanced Reliability**: More robust error handling and validation throughout the plugin
+- **Better Documentation**: Comprehensive troubleshooting guides and recommended settings
 
 ## Features
 
-- **Upload Optimization**: Automatically resize and compress images on upload
+- **Upload Optimization**: Automatically resize and compress images on upload (can be disabled)
+- **WebP Support**: Generate cached images in WebP format for better compression
 - **Remove Image Sizes**: Globally disable all intermediate sizes or selectively disable specific ones
 - **Dynamic Image Generation**: Generate images at any size on-demand with `simplimg()` function
 - **WordPress Function Override**: Automatically use optimized images for all WordPress image functions
@@ -19,6 +23,7 @@ A WordPress plugin for media library optimization that prevents intermediate ima
 - **Aspect Ratio Support**: Easy 16:9, 4:3, 1:1, etc. with automatic cropping
 - **WooCommerce Safe**: Keep WooCommerce sizes while removing others
 - **Theme Compatible**: Identify and selectively disable theme-specific image sizes
+- **Error Logging**: Detailed error logging for troubleshooting upload issues
 
 ## Installation
 
@@ -49,16 +54,26 @@ Configure how images are processed when uploaded:
 - Default: 1200px
 - Resizes images on their longest edge
 - Set to 0 to disable resizing
+- **Note**: If experiencing upload errors, set to 0
 
 **Max Image File Size**
 - Default: 1.2MB
 - Compresses images to stay under this limit
 - Set to 0 to disable compression
+- **Note**: If experiencing upload errors, set to 0
 
 **JPEG Compression Quality**
 - Default: 82%
 - Starting quality for JPEG compression (1-100)
 - Higher = better quality but larger files
+
+**WebP Format** ⭐ NEW in 1.3.0
+- Default: Disabled
+- When enabled, cached images are saved in WebP format
+- Typically 25-35% smaller than JPEG with same visual quality
+- Only affects dynamically generated cached images, not uploaded originals
+- Automatically clears cache when toggled to regenerate in new format
+- Requires server WebP support (GD 2.0+ or Imagick)
 
 **Cache Management**
 - View cached image statistics (count and size)
@@ -302,8 +317,13 @@ Use simplimg() manually in theme templates
 
 ```
 {image-id}-{width}x{height}-{crop}.{ext}
-Example: 123-300x300-crop.jpg
+Examples: 
+  123-300x300-crop.jpg (WebP disabled)
+  123-300x300-crop.webp (WebP enabled)
+  456-16x9-crop-top.webp
 ```
+
+**Note:** File extension changes based on WebP setting. When you toggle WebP on/off, cache is automatically cleared and regenerated in the new format.
 
 ### Manual Cache Clearing
 
@@ -348,43 +368,60 @@ Regeneration processes all images in your media library. For sites with thousand
 
 ## Use Cases
 
-### Photography Website
+### Recommended for Most Sites (Safest)
 ```
-Max Dimension: 2400px (high-quality display)
-Max File Size: 2MB
-JPEG Quality: 85%
+Max Dimension: 0 (disabled - no upload errors)
+Max File Size: 0 (disabled - no upload errors)
+JPEG Quality: 82%
+WebP Format: ON (if supported)
 Remove All Sizes: ON
 Override WordPress Functions: ON
 ```
+**Why:** Upload processing disabled = no upload errors. All optimization happens on-demand when images are first viewed. Most reliable approach.
+
+### Photography Website
+```
+Max Dimension: 2400px (high-quality display)
+Max File Size: 3MB
+JPEG Quality: 90%
+WebP Format: OFF (maintain quality)
+Remove All Sizes: ON
+Override WordPress Functions: ON
+```
+**Note:** Requires powerful server. For shared hosting, use "Most Sites" settings above.
 
 ### Blog/Content Site
 ```
-Max Dimension: 1200px (standard width)
-Max File Size: 1MB
+Max Dimension: 0 (disabled for reliability)
+Max File Size: 0 (disabled for reliability)
 JPEG Quality: 82%
+WebP Format: ON
 Remove All Sizes: ON
 Override WordPress Functions: ON
 ```
 
 ### eCommerce Site (WooCommerce)
 ```
-Max Dimension: 1500px (product detail)
-Max File Size: 1.5MB
+Max Dimension: 0 (disabled for reliability)
+Max File Size: 0 (disabled for reliability)
 JPEG Quality: 85%
+WebP Format: ON (if supported)
 Remove All Sizes: OFF
 Override WordPress Functions: ON
 Disabled: Theme sizes only
 Enabled: WooCommerce + Core sizes
 ```
 
-### High-Volume Site
+### Shared Hosting / Limited Resources
 ```
-Max Dimension: 1000px (minimize storage)
-Max File Size: 800KB
-JPEG Quality: 75%
+Max Dimension: 0 (IMPORTANT - prevents upload errors)
+Max File Size: 0 (IMPORTANT - prevents upload errors)
+JPEG Quality: 82%
+WebP Format: Check server support first
 Remove All Sizes: ON
 Override WordPress Functions: ON
 ```
+**Critical:** Low memory limits require upload optimization disabled.
 
 ## Technical Details
 
@@ -410,17 +447,41 @@ Total: 1 file per upload
 
 ### File Type Support
 
+**Upload Processing:**
 - **JPEG/JPG**: Full optimization with quality control
-- **PNG**: Dimension resizing only
-- **GIF**: Dimension resizing only
-- **WebP**: Basic support
+- **PNG**: Dimension resizing, transparency preserved
+- **GIF**: Dimension resizing, animation preserved
+- **WebP**: Basic upload handling
+
+**Cached Image Generation:**
+- All formats can be generated as WebP (if enabled and supported)
+- Original upload format preserved in Media Library
+- Only cached/dynamic images affected by WebP setting
+
+### WebP Compatibility
+
+**Browser Support:**
+- Chrome 23+, Firefox 65+, Edge 18+, Safari 14+, Opera 12.1+
+- ~95% of global browser usage (2024)
+
+**Server Requirements:**
+- GD Library: PHP 5.5+ with --with-vpx-dir flag
+- Imagick: ImageMagick 6.3.7+
+- Check: Plugin automatically detects support
+
+**Benefits:**
+- 25-35% smaller file sizes vs JPEG
+- Same visual quality
+- Faster page loads
+- Less bandwidth usage
 
 ### Performance
 
-**Upload Processing:** <1 second per image  
+**Upload Processing:** <1 second per image (if enabled)  
 **First Dynamic Request:** 100-200ms (generation + cache)  
 **Cached Requests:** 0ms (direct file access)  
-**Override Mode:** ~5ms (cache check + return URL)
+**Override Mode:** ~5ms (cache check + return URL)  
+**WebP Generation:** Same speed as JPEG, smaller output files
 
 ### Compatibility
 
@@ -432,11 +493,48 @@ Total: 1 file per upload
 
 ### Server Requirements
 
+**Minimum:**
 - GD or Imagick PHP extension
-- PHP memory_limit: 256M recommended for large images
+- PHP memory_limit: 128M (256M for upload optimization)
 - Write permissions to `/wp-content/uploads/`
 
+**Recommended:**
+- Imagick extension (better than GD)
+- PHP memory_limit: 256M+ (especially for upload optimization)
+- PHP max_execution_time: 300
+- WebP support for smaller cached files
+
+**For Upload Optimization:**
+- Requires more memory and processing power
+- Not recommended for shared hosting
+- Set to 0/0 if experiencing upload errors
+- On-demand optimization works on any server
+
 ## Troubleshooting
+
+### Upload errors: "Server cannot process the image" ⚠️ COMMON ISSUE
+**Quick Fix:**
+1. Go to Settings > Simpli Images > Uploads
+2. Set "Max Image Dimension" to **0**
+3. Set "Max Image File Size" to **0**
+4. Save settings and try uploading again
+
+**Why this happens:**
+- Upload optimization can fail on servers with low memory
+- Common on shared hosting
+- Large images require more processing power
+
+**Solution:**
+- Disable upload optimization (set both to 0)
+- All optimization happens on-demand instead
+- Much more reliable, no upload errors
+- You still get all other plugin benefits
+
+**If you want upload optimization:**
+- Increase PHP memory_limit to 256M or higher
+- Test with smaller images first
+- Gradually increase dimension/size limits
+- See `UPLOAD_TROUBLESHOOTING.md` for detailed diagnostics
 
 ### Images aren't being resized on upload
 - Check that Max Dimension > 0
@@ -472,6 +570,19 @@ Total: 1 file per upload
 - Clear all caches (plugin cache, page cache, browser cache)
 - Test with a default theme to isolate theme-specific issues
 
+### WebP images not generating
+- Check if your server supports WebP
+- Go to Settings > Simpli Images > Uploads
+- Disable WebP Format checkbox
+- Enable WordPress debug logging to check for errors
+- GD library needs WebP support (PHP 5.5+ with --with-vpx-dir)
+- Or Imagick extension with ImageMagick 6.3.7+
+
+### Cache not clearing when toggling WebP
+- This should happen automatically
+- If not, manually clear cache via Settings > Uploads tab
+- Or use `simplimg_clear_all_cache()` function
+
 ## Migration & Deactivation
 
 ### Migrating Away
@@ -496,6 +607,18 @@ For support or custom development:
 - Plugin URI: https://simpliweb.com.au
 
 ## Changelog
+
+### 1.3.0
+- NEW: WebP format support for cached images (25-35% smaller files)
+- NEW: Automatic cache clearing when WebP setting is toggled
+- NEW: Comprehensive error handling and logging for upload optimization
+- NEW: Option to disable upload optimization to prevent errors
+- IMPROVED: More robust error handling throughout the plugin
+- IMPROVED: Better validation in image processing
+- IMPROVED: Detailed troubleshooting documentation
+- FIX: Upload errors on servers with limited resources
+- FIX: Proper WebP mime type handling
+- FIX: Memory and timeout issues during upload processing
 
 ### 1.2.0
 - NEW: Override WordPress image functions (wp_get_attachment_image, the_post_thumbnail, etc.)

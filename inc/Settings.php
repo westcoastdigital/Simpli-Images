@@ -39,6 +39,9 @@ class Simpli_Images_Settings
 
         // Add redirect handler to preserve tab parameter
         add_filter('wp_redirect', array($this, 'preserve_tab_on_redirect'), 10, 2);
+        
+        // Handle WebP setting changes - clear cache when toggled
+        add_action('update_option_simpli_images_webp', array($this, 'handle_webp_change'), 10, 2);
     }
 
     /**
@@ -126,6 +129,12 @@ class Simpli_Images_Settings
         ));
 
         register_setting('simpli_images_sizes', 'simpli_images_regenerate_on_deactivation', array(
+            'type' => 'boolean',
+            'sanitize_callback' => 'rest_sanitize_boolean',
+            'default' => false
+        ));
+
+        register_setting('simpli_images_uploads', 'simpli_images_webp', array(
             'type' => 'boolean',
             'sanitize_callback' => 'rest_sanitize_boolean',
             'default' => false
@@ -351,6 +360,24 @@ class Simpli_Images_Settings
                             class="regular-text">
                         <p class="description">
                             Quality for JPEG compression (1-100). Default: 82. Higher = better quality but larger file size.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label for="simpli_images_webp">WebP Format</label>
+                    </th>
+
+                    <td>
+                        <label>
+                            <input type="checkbox"
+                                name="simpli_images_webp"
+                                id="simpli_images_webp"
+                                value="1"
+                                <?php checked(get_option('simpli_images_webp', false)); ?>>
+                        </label>
+                        <p class="description">
+                            When enabled, generated images will be saved in WebP format.
                         </p>
                     </td>
                 </tr>
@@ -746,6 +773,17 @@ class Simpli_Images_Settings
             'thumbnails-regenerated' => $count
         ), admin_url('upload.php')));
         exit;
+    }
+
+    /**
+     * Handle WebP setting change - clear cache when toggled
+     */
+    public function handle_webp_change($old_value, $new_value)
+    {
+        // If the setting changed, clear all cached images
+        if ($old_value !== $new_value) {
+            $this->clear_all_cache();
+        }
     }
 
     /**

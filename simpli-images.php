@@ -3,7 +3,7 @@
 Plugin Name:  Simpli Images
 Plugin URI:   https://simpliweb.com.au
 Description:  WordPress media optimiser
-Version:      1.2.0
+Version:      1.3.0
 Author:       SimpliWeb
 Author URI:   https://simpliweb.com.au
 License:      GPL v2 or later
@@ -110,18 +110,39 @@ class Simpli_Images
         }
 
         $file_path = $upload['file'];
+        
+        // Check if file exists before processing
+        if (!file_exists($file_path)) {
+            return $upload;
+        }
+        
         $max_dimension = absint(get_option('simpli_images_max_dimension', 1200));
         $max_size_mb = floatval(get_option('simpli_images_max_size', 1.2));
         $jpeg_quality = absint(get_option('simpli_images_jpeg_quality', 82));
+
+        // If all optimization is disabled, just delete -scaled and return
+        if ($max_dimension == 0 && $max_size_mb == 0) {
+            $this->delete_scaled_image($file_path);
+            return $upload;
+        }
 
         // Get image editor
         $image_editor = wp_get_image_editor($file_path);
 
         if (is_wp_error($image_editor)) {
+            // If image editor fails, just return the upload as-is
+            error_log('Simpli Images: Image editor error - ' . $image_editor->get_error_message());
             return $upload;
         }
 
         $current_size = $image_editor->get_size();
+        
+        // Validate size was retrieved
+        if (!$current_size || !isset($current_size['width']) || !isset($current_size['height'])) {
+            error_log('Simpli Images: Could not get image dimensions');
+            return $upload;
+        }
+        
         $needs_resize = false;
 
         // Check if resizing is needed based on dimensions
@@ -139,7 +160,13 @@ class Simpli_Images
                     $new_width = intval($current_size['width'] * ($max_dimension / $current_size['height']));
                 }
 
-                $image_editor->resize($new_width, $new_height, false);
+                $resize_result = $image_editor->resize($new_width, $new_height, false);
+                
+                // Check if resize failed
+                if (is_wp_error($resize_result)) {
+                    error_log('Simpli Images: Resize error - ' . $resize_result->get_error_message());
+                    return $upload;
+                }
             }
         }
 
@@ -150,9 +177,17 @@ class Simpli_Images
 
         // Save the optimized image
         if ($needs_resize) {
+            // Save in the ORIGINAL format, not WebP (WebP is only for cached images)
             $saved = $image_editor->save($file_path);
 
             if (is_wp_error($saved)) {
+                error_log('Simpli Images: Save error - ' . $saved->get_error_message());
+                return $upload;
+            }
+            
+            // Verify file still exists after save
+            if (!file_exists($file_path)) {
+                error_log('Simpli Images: File disappeared after save');
                 return $upload;
             }
         }
@@ -160,13 +195,20 @@ class Simpli_Images
         // Check file size and compress if needed
         if ($max_size_mb > 0) {
             $max_size_bytes = $max_size_mb * 1024 * 1024;
-            $current_file_size = filesize($file_path);
+            $current_file_size = @filesize($file_path);
+            
+            // Verify filesize worked
+            if ($current_file_size === false) {
+                error_log('Simpli Images: Could not get file size');
+                return $upload;
+            }
 
             if ($current_file_size > $max_size_bytes) {
                 // Reload the image editor if we already saved
                 if ($needs_resize) {
                     $image_editor = wp_get_image_editor($file_path);
                     if (is_wp_error($image_editor)) {
+                        error_log('Simpli Images: Image editor reload error - ' . $image_editor->get_error_message());
                         return $upload;
                     }
                 }
@@ -179,8 +221,21 @@ class Simpli_Images
                     while ($current_file_size > $max_size_bytes && $quality > 20 && $attempts < 10) {
                         $quality -= 5;
                         $image_editor->set_quality($quality);
-                        $image_editor->save($file_path);
-                        $current_file_size = filesize($file_path);
+                        
+                        $save_result = $image_editor->save($file_path);
+                        
+                        if (is_wp_error($save_result)) {
+                            error_log('Simpli Images: Compression save error - ' . $save_result->get_error_message());
+                            break; // Stop trying if save fails
+                        }
+                        
+                        $current_file_size = @filesize($file_path);
+                        
+                        if ($current_file_size === false) {
+                            error_log('Simpli Images: Could not get file size during compression');
+                            break;
+                        }
+                        
                         $attempts++;
                     }
                 }
@@ -189,6 +244,12 @@ class Simpli_Images
 
         // Delete the -scaled version if it exists
         $this->delete_scaled_image($file_path);
+        
+        // Final verification that file exists and is readable
+        if (!file_exists($file_path) || !is_readable($file_path)) {
+            error_log('Simpli Images: Final file check failed');
+            return $upload;
+        }
 
         return $upload;
     }

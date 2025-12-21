@@ -251,7 +251,18 @@ class Simpli_Images_Helpers {
             return false;
         }
         
-        // Find file with this cache key
+        // Check if WebP is enabled
+        $use_webp = get_option('simpli_images_webp', false);
+        
+        // Look for the specific format first
+        if ($use_webp) {
+            $webp_file = $cache_dir . $cache_key . '.webp';
+            if (file_exists($webp_file)) {
+                return $upload_dir['baseurl'] . '/simpli-cache/' . $cache_key . '.webp';
+            }
+        }
+        
+        // Find file with this cache key (fallback to any extension)
         $files = glob($cache_dir . $cache_key . '.*');
         
         if (!empty($files) && file_exists($files[0])) {
@@ -280,24 +291,48 @@ class Simpli_Images_Helpers {
             file_put_contents($cache_dir . '.htaccess', $htaccess_content);
         }
         
-        // Get file extension from original file
-        if ($original_path && file_exists($original_path)) {
-            $extension = strtolower(pathinfo($original_path, PATHINFO_EXTENSION));
-        } else {
-            $extension = 'jpg'; // Default fallback
+        // Check if WebP is enabled and supported
+        $use_webp = get_option('simpli_images_webp', false);
+        
+        // Verify WebP support if trying to use it
+        if ($use_webp && !$image_editor->supports_mime_type('image/webp')) {
+            // Fall back to original format if WebP not supported
+            $use_webp = false;
         }
         
-        // Ensure valid extension
-        $valid_extensions = array('jpg', 'jpeg', 'png', 'gif', 'webp');
-        if (!in_array($extension, $valid_extensions)) {
-            $extension = 'jpg';
+        // Determine file extension
+        if ($use_webp) {
+            $extension = 'webp';
+        } else {
+            // Get file extension from original file
+            if ($original_path && file_exists($original_path)) {
+                $extension = strtolower(pathinfo($original_path, PATHINFO_EXTENSION));
+            } else {
+                $extension = 'jpg'; // Default fallback
+            }
+            
+            // Ensure valid extension
+            $valid_extensions = array('jpg', 'jpeg', 'png', 'gif', 'webp');
+            if (!in_array($extension, $valid_extensions)) {
+                $extension = 'jpg';
+            }
         }
         
         $file_name = $cache_key . '.' . $extension;
         $file_path = $cache_dir . $file_name;
         
-        // Save the image
-        $saved = $image_editor->save($file_path);
+        // Set quality for the image
+        $quality = get_option('simpli_images_jpeg_quality', 82);
+        $image_editor->set_quality($quality);
+        
+        // Save the image with appropriate settings
+        if ($use_webp) {
+            // For WebP, specify the mime type in save()
+            $saved = $image_editor->save($file_path, 'image/webp');
+        } else {
+            // Save in original format
+            $saved = $image_editor->save($file_path);
+        }
         
         if (is_wp_error($saved)) {
             return $saved;
