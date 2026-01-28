@@ -25,6 +25,25 @@ define('SIMPLI_IMAGES_URL', plugin_dir_url(__FILE__));
 require_once SIMPLI_IMAGES_PATH . 'inc/Settings.php';
 require_once SIMPLI_IMAGES_PATH . 'inc/helpers.php';
 
+// Include the updater class
+require_once plugin_dir_path(__FILE__) . 'github-updater.php';
+
+// For private repos, uncomment and add your token:
+// define('SW_GITHUB_ACCESS_TOKEN', 'your_token_here');
+
+if (class_exists('SimpliWeb_GitHub_Updater')) {
+    $updater = new SimpliWeb_GitHub_Updater(__FILE__);
+    $updater->set_username('westcoastdigital'); // Update Username
+    $updater->set_repository('Simpli-Images'); // Update plugin slug
+    
+    if (defined('GITHUB_ACCESS_TOKEN')) {
+      $updater->authorize(SW_GITHUB_ACCESS_TOKEN);
+    }
+    
+    $updater->initialize();
+}
+// ============================================
+
 class Simpli_Images
 {
 
