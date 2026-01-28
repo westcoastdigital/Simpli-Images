@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('SIMPLI_IMAGES_VERSION', '1.1.0');
+define('SIMPLI_IMAGES_VERSION', '1.3.0');
 define('SIMPLI_IMAGES_PATH', plugin_dir_path(__FILE__));
 define('SIMPLI_IMAGES_URL', plugin_dir_url(__FILE__));
 
